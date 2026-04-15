@@ -4,7 +4,7 @@ export async function POST(req: NextRequest) {
   try {
     const { system, user } = await req.json();
 
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.GROQ_API_KEY;
 
     if (!apiKey) {
       return NextResponse.json(
@@ -13,58 +13,54 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const combinedPrompt = `${system}
+    const response = await fetch(
+      "https://api.groq.com/openai/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: "llama-3.3-70b-versatile",
+          temperature: 0.7,
+          max_tokens: 2000,
+          messages: [
+            {
+              role: "system",
+              content: `${system}
 
 ÇIKTI FORMAT KURALI:
 Yanıtını SADECE geçerli JSON formatında ver. Markdown code block kullanma, düz JSON yaz.
 Format:
 {
-  "result": "Detaylı analiz sonucu (markdown formatında, başlıklar, tablolar, listeler kullanabilirsin)",
-  "reasoning_summary": "Bu analizde hangi verileri dikkate aldın ve neden bu sonuca vardın - 2-3 cümle",
+  "result": "Detaylı analiz sonucu (markdown formatında yaz, başlıklar ## ###, tablolar |, listeler - kullan)",
+  "reasoning_summary": "Bu analizde hangi verileri dikkate aldın - 2-3 cümle",
   "assumptions": ["Varsayım 1", "Varsayım 2", "Varsayım 3"],
   "confidence": 85,
   "next_actions": ["Aksiyon 1", "Aksiyon 2", "Aksiyon 3"]
-}
-
-KULLANICI İSTEĞİ:
-${user}`;
-
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          contents: [
+}`,
+            },
             {
-              parts: [
-                {
-                  text: combinedPrompt,
-                },
-              ],
+              role: "user",
+              content: user,
             },
           ],
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 2000,
-          },
         }),
       }
     );
 
     if (!response.ok) {
       const error = await response.text();
-      console.error("Gemini error:", error);
-      throw new Error("Gemini API error");
+      console.error("Groq error:", error);
+      throw new Error("Groq API error");
     }
 
     const data = await response.json();
-    const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    const content = data.choices?.[0]?.message?.content;
 
     if (!content) {
-      throw new Error("Empty response from Gemini");
+      throw new Error("Empty response from Groq");
     }
 
     let parsed;
@@ -84,7 +80,7 @@ ${user}`;
           "Sektör standartları referans alındı",
           "Mevcut pazar koşulları dikkate alındı",
         ],
-        confidence: 80,
+        confidence: 82,
         next_actions: [
           "Sonucu gözden geçir ve uygulama planı oluştur",
           "Ekiple paylaş ve geri bildirim al",
