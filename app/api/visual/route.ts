@@ -5,76 +5,70 @@ export async function POST(req: NextRequest) {
     const { prompt, style, platform, companyName, tone, companyType } =
       await req.json();
 
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.GROQ_API_KEY;
 
     let imagePrompt = `${style}, ${prompt}, professional commercial photography, high quality, ${
       companyType === "dental"
-        ? "dental clinic aesthetic"
+        ? "dental clinic aesthetic, clean white environment"
         : companyType === "veterinary"
-          ? "veterinary clinic warm atmosphere"
-          : "real estate luxury photography"
+          ? "veterinary clinic warm atmosphere, caring environment"
+          : "real estate luxury photography, modern architecture"
     }`;
 
     if (apiKey) {
       try {
-        const geminiResponse = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+        const groqResponse = await fetch(
+          "https://api.groq.com/openai/v1/chat/completions",
           {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${apiKey}`,
+            },
             body: JSON.stringify({
-              contents: [
+              model: "llama-3.3-70b-versatile",
+              temperature: 0.8,
+              max_tokens: 150,
+              messages: [
                 {
-                  parts: [
-                    {
-                      text: `Sen profesyonel bir görsel yönetmenisin.
-Aşağıdaki brief için Stable Diffusion / Flux image generation prompt'u oluştur.
-
-Şirket: ${companyName}
-Ton: ${tone}
+                  role: "user",
+                  content: `Create a professional image generation prompt in English for:
+Company: ${companyName}
+Tone: ${tone}
 Platform: ${platform}
 Style: ${style}
 Brief: ${prompt}
+Sector: ${companyType}
 
-KURALLAR:
-- İngilizce prompt yaz
-- Maksimum 80 kelime
-- Sadece prompt yaz, başka hiçbir şey ekleme, açıklama yapma
-- professional photography, commercial quality ifadelerini ekle
-- Platform kompozisyonu: ${
-                        platform === "instagram"
-                          ? "square composition 1:1"
-                          : platform === "story"
-                            ? "vertical composition 9:16"
-                            : platform === "facebook"
-                              ? "landscape composition 16:9"
-                              : "wide banner composition"
-                      }`,
-                    },
-                  ],
+Rules:
+- English only
+- Max 80 words
+- Only the prompt, no explanation
+- Include: professional photography, commercial quality
+- Composition: ${
+                    platform === "instagram"
+                      ? "square 1:1"
+                      : platform === "story"
+                        ? "vertical 9:16"
+                        : platform === "facebook"
+                          ? "landscape 16:9"
+                          : "wide banner"
+                  }`,
                 },
               ],
-              generationConfig: {
-                temperature: 0.8,
-                maxOutputTokens: 200,
-              },
             }),
           }
         );
 
-        if (geminiResponse.ok) {
-          const data = await geminiResponse.json();
-          const generatedPrompt =
-            data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (groqResponse.ok) {
+          const data = await groqResponse.json();
+          const generatedPrompt = data.choices?.[0]?.message?.content;
           if (generatedPrompt) {
-            imagePrompt = generatedPrompt
-              .replace(/```/g, "")
-              .trim();
+            imagePrompt = generatedPrompt.replace(/```/g, "").trim();
           }
         }
-      } catch (geminiError) {
-        console.error("Gemini prompt generation failed:", geminiError);
-        // fallback imagePrompt kullanılmaya devam eder
+      } catch (groqError) {
+        console.error("Groq prompt generation failed:", groqError);
       }
     }
 
@@ -86,8 +80,7 @@ KURALLAR:
     };
 
     const dim =
-      dimensions[platform as keyof typeof dimensions] ||
-      dimensions.instagram;
+      dimensions[platform as keyof typeof dimensions] || dimensions.instagram;
 
     const cleanPrompt = imagePrompt
       .replace(/```/g, "")
