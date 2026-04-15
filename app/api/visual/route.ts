@@ -2,18 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
   try {
-    const { prompt, style, platform, companyName, tone, companyType } =
-      await req.json();
+    const { prompt, style, platform, companyName, tone } = await req.json();
 
     const apiKey = process.env.GROQ_API_KEY;
-
-    let imagePrompt = `${style}, ${prompt}, professional commercial photography, high quality, ${
-      companyType === "dental"
-        ? "dental clinic aesthetic, clean white environment"
-        : companyType === "veterinary"
-          ? "veterinary clinic warm atmosphere, caring environment"
-          : "real estate luxury photography, modern architecture"
-    }`;
+    let imagePrompt = `${style}, ${prompt}, luxury real estate photography, professional commercial, high quality, 4K`;
 
     if (apiKey) {
       try {
@@ -28,32 +20,14 @@ export async function POST(req: NextRequest) {
             body: JSON.stringify({
               model: "llama-3.3-70b-versatile",
               temperature: 0.8,
-              max_tokens: 150,
+              max_tokens: 120,
               messages: [
                 {
                   role: "user",
-                  content: `Create a professional image generation prompt in English for:
-Company: ${companyName}
-Tone: ${tone}
-Platform: ${platform}
-Style: ${style}
-Brief: ${prompt}
-Sector: ${companyType}
-
-Rules:
-- English only
-- Max 80 words
-- Only the prompt, no explanation
-- Include: professional photography, commercial quality
-- Composition: ${
-                    platform === "instagram"
-                      ? "square 1:1"
-                      : platform === "story"
-                        ? "vertical 9:16"
-                        : platform === "facebook"
-                          ? "landscape 16:9"
-                          : "wide banner"
-                  }`,
+                  content: `Create a Flux/Stable Diffusion image prompt in English for:
+Company: ${companyName}, Tone: ${tone}, Style: ${style}, Brief: ${prompt}
+Rules: English only, max 70 words, only the prompt, professional real estate photography, commercial quality
+Platform composition: ${platform === "instagram" ? "square 1:1" : platform === "story" ? "vertical 9:16" : "landscape 16:9"}`,
                 },
               ],
             }),
@@ -62,13 +36,11 @@ Rules:
 
         if (groqResponse.ok) {
           const data = await groqResponse.json();
-          const generatedPrompt = data.choices?.[0]?.message?.content;
-          if (generatedPrompt) {
-            imagePrompt = generatedPrompt.replace(/```/g, "").trim();
-          }
+          const generated = data.choices?.[0]?.message?.content;
+          if (generated) imagePrompt = generated.replace(/```/g, "").trim();
         }
-      } catch (groqError) {
-        console.error("Groq prompt generation failed:", groqError);
+      } catch (e) {
+        console.error("Groq visual error:", e);
       }
     }
 
@@ -79,30 +51,18 @@ Rules:
       google: { width: 728, height: 90 },
     };
 
-    const dim =
-      dimensions[platform as keyof typeof dimensions] || dimensions.instagram;
-
-    const cleanPrompt = imagePrompt
-      .replace(/```/g, "")
-      .trim()
-      .substring(0, 400);
-
-    const encodedPrompt = encodeURIComponent(cleanPrompt);
+    const dim = dimensions[platform as keyof typeof dimensions] || dimensions.instagram;
+    const cleanPrompt = imagePrompt.replace(/```/g, "").trim().substring(0, 400);
     const seed = Math.floor(Math.random() * 999999);
 
-    const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${dim.width}&height=${dim.height}&nologo=true&enhance=true&seed=${seed}`;
-
     return NextResponse.json({
-      imageUrl,
+      imageUrl: `https://image.pollinations.ai/prompt/${encodeURIComponent(cleanPrompt)}?width=${dim.width}&height=${dim.height}&nologo=true&enhance=true&seed=${seed}`,
       usedPrompt: cleanPrompt,
       dimensions: dim,
       platform,
     });
   } catch (error) {
     console.error("Visual route error:", error);
-    return NextResponse.json(
-      { error: "Visual service error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Visual service error" }, { status: 500 });
   }
 }
